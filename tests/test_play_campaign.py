@@ -273,3 +273,10 @@ def test_manifest_checks_the_stored_profile_hash_after_rendering():
     script = (ROOT / "demo" / "play-campaign.mjs").read_text(encoding="utf-8")
     assert "unchanged_after_render = sha256(servedSample) === sampleHashBefore" in script
     assert "throw new Error('the stored profile changed during the render')" in script
+
+
+def test_renderer_refuses_a_site_that_is_not_a_fresh_build_of_the_commit():
+    # Same shared check as the organize campaign (demo/lib.mjs): a stale build stops the render, it does not just warn.
+    script = (ROOT / "demo" / "play-campaign.mjs").read_text(encoding="utf-8")
+    assert "siteIdentity()" in script and "=== false) {\n  throw new Error" in script
+    assert "scripts/build_site.py'), check]" not in script  # no second, inline copy of the build comparison

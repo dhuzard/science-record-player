@@ -213,13 +213,10 @@ function withAudio(src, dst, total) {
   return dst;
 }
 
-const git = (a) => { try { return execFileSync('git', a, { cwd: ROOT, encoding: 'utf8' }).trim(); } catch { return 'unknown'; } };
 const { createHash } = await import('node:crypto');
 const sha256 = (file) => createHash('sha256').update(readFileSync(file)).digest('hex');
-// The build digest that scripts/build_site.py writes into sw.js (a hash over every other site file).
-const buildDigest = (dir) => readFileSync(resolve(dir, 'sw.js'), 'utf8').match(/const VERSION = '([0-9a-f]+)'/)?.[1] || 'unknown';
 // Provenance comes from the site that is served and filmed, not from the checkout.
-const { SITE_DIR } = await import('./lib.mjs');
+const { SITE_DIR, siteIdentity } = await import('./lib.mjs');
 const servedSample = resolve(SITE_DIR, 'generated/biosketch.json');
 const stored = JSON.parse(readFileSync(servedSample, 'utf8')).provenance || {};
 const sampleHashBefore = sha256(servedSample);
@@ -228,19 +225,19 @@ if (maskOn) {
   const out = JSON.parse(execFileSync('python', [resolve(HERE, 'coauthor_mask.py'), servedSample], { encoding: 'utf8', maxBuffer: 64 << 20 }));
   maskedSample = JSON.stringify(out.biosketch); maskedNames = out.masked_names;
 } else console.warn(`WARNING: ${COMPOSITION.coauthor_mask.opt_out_flag}: co-author names are visible. Owner consent is required before any use.`);
-// Does the served site equal a fresh build of this checkout? If not, the renderer commit says nothing about the screens.
-let siteMatchesCheckout = null;
-try {
-  const check = resolve(RAW, 'site-check');
-  execFileSync('python', [resolve(ROOT, 'scripts/build_site.py'), check], { cwd: ROOT, stdio: 'ignore' });
-  siteMatchesCheckout = buildDigest(check) === buildDigest(SITE_DIR);
-} catch { /* rebuild unavailable (e.g. no Pyodide cache): left as null, to be checked by hand */ }
+// The renderer commit and, separately, the identity of the served build that is filmed (demo/lib.mjs). A site that
+// is not a fresh build of this commit is refused, as in demo/organize-campaign.mjs: the commit would say nothing
+// about the screens.
+const identity = siteIdentity();
+if (identity.captured_site.matches_fresh_build_of_renderer_commit === false) {
+  throw new Error(`the served site (${identity.captured_site.dir}, build ${identity.captured_site.build_digest}) is not a fresh build of ${identity.renderer.commit}; rebuild it with python scripts/build_site.py`);
+}
+if (identity.captured_site.matches_fresh_build_of_renderer_commit === null) console.warn('WARNING: could not rebuild the site to compare it; check captured_site by hand.');
 const manifest = {
   status: COMPOSITION.status, blocked_by: COMPOSITION.blocked_by,
-  renderer: { commit: git(['rev-parse', 'HEAD']), working_tree_clean: git(['status', '--porcelain']) === '' },
+  renderer: identity.renderer,
   captured_site: {
-    dir: SITE_DIR, build_digest: buildDigest(SITE_DIR), matches_fresh_build_of_renderer_commit: siteMatchesCheckout,
-    served_from: 'locally on 127.0.0.1; not the hosted deployment',
+    ...identity.captured_site,
     sample: { path: 'generated/biosketch.json', sha256: sampleHashBefore, unchanged_after_render: null, primary_source: stored.primary_source, stored_copy_generated_at: stored.generated_at },
   },
   coauthor_masking: { enabled: maskOn, masked_names: maskedNames, placeholder: COMPOSITION.coauthor_mask.placeholder,
@@ -250,7 +247,6 @@ const manifest = {
   audio: (flag('narration') || flag('music')) ? 'optional audio versions rendered from files passed on the command line' : 'none (silent; captions burned in)',
   outputs: [],
 };
-if (siteMatchesCheckout === false) console.warn('WARNING: the served site differs from a fresh build of this commit; see captured_site in the manifest.');
 
 const site = await serveSite();
 const browser = await chromium.launch();

@@ -84,7 +84,7 @@ profile; the file itself is not changed). `--show-coauthor-names` turns this off
 | `play-campaign-square.mp4` | 42 s, 1080x1080 | hook 5 · profile 7 · card 8 · journey 9 · useful 6 · cta 7 |
 | `play-campaign-landscape.mp4` | 42 s, 1280x720 | same, 16:9 master |
 | `play-walkthrough-landscape.mp4` | 115 s, 1280x720 | intro, profile, card, heatmap, wrapped, fortune, check, funder, citations, cta |
-| `play-campaign-manifest.json` | | commit SHA, render date, data source, measured durations |
+| `play-campaign-manifest.json` | | renderer commit, served build digest (checked against a fresh build; a stale site stops the render), render date, data source, measured durations |
 | `play-*-thumbnail.png` | | frame from the opening card |
 
 ## LinkedIn copy (drafts)
